@@ -5,13 +5,11 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/nritholtz/stdemuxerhook"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 )
 
 var opts struct {
@@ -84,7 +82,7 @@ func gitCheckoutRef(repositoryPath string, ref string, destinationDir string) {
 }
 
 func main() {
-	//fmt.Printf("Terrafile: version %v, commit %v, built at %v \n", version, commit, date)
+	// fmt.Printf("Terrafile: version %v, commit %v, built at %v \n", version, commit, date)
 	_, err := flags.Parse(&opts)
 
 	// Invalid choice
@@ -98,27 +96,32 @@ func main() {
 		panic(err)
 	}
 
-	// Parse File
-	var config map[string][]string
-	if err := yaml.Unmarshal(yamlFile, &config); err != nil {
+	// Parse Terrafile
+	sourceDependenciesMap, err := parseTerrafile(yamlFile)
+	if err != nil {
 		panic(err)
 	}
 
-	// Clone modules
-	os.RemoveAll(opts.ModulePath)
-	os.MkdirAll(opts.ModulePath, os.ModePerm)
-	for source, refs := range config {
+	// Cleanup module path
+	if err := os.RemoveAll(opts.ModulePath); err != nil {
+		panic(err)
+	}
+
+	if err := os.MkdirAll(opts.ModulePath, os.ModePerm); err != nil {
+		panic(err)
+	}
+
+	for source, dependencies := range sourceDependenciesMap {
 		fmt.Printf("[*] Cloning   %s\n", source)
 		repo := gitClone(source)
-		for _, ref := range refs {
-			pathParts := strings.Split(source, ":")
-			repositoryName := pathParts[1]
-			fmt.Printf("[*] Vendoring ref %s\n", ref)
-			targetPath, err := filepath.Abs(fmt.Sprintf("%s/%s/%s", opts.ModulePath, repositoryName, ref))
+		for _, dependency := range dependencies {
+			fmt.Printf("[*] Vendoring ref %s\n", dependency.Version)
+			targetPath, err := dependency.GetTargetPath(opts.ModulePath)
 			if err != nil {
 				panic(err)
 			}
-			gitCheckoutRef(repo, ref, targetPath)
+
+			gitCheckoutRef(repo, dependency.Version, targetPath)
 		}
 	}
 }
