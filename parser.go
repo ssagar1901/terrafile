@@ -37,7 +37,7 @@ type SourceRef struct {
 func parseTerrafile(in []byte) (SourceDependenciesMap, error) {
 	// Try parse Segment internal format
 	result, err := parseSegmentTerrafile(in)
-	if err != nil {
+	if _, ok := err.(*yaml.TypeError); ok {
 		// Try fallback to community format
 		result, err = parseCommunityTerrafile(in)
 	}
